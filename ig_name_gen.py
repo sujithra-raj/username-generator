@@ -51,7 +51,7 @@ ver=[
     "making", "building", "creating", "breaking", "fixing", "moving", "stopping", "starting",
     "opening", "closing", "pushing", "pulling", "carrying", "holding", "throwing", "catching",
     "buying", "selling", "paying", "giving", "taking", "sending", "receiving", "finding",
-    "losing", "keeping", "feeling", "loving", "liking", "trying","busy"
+    "losing", "keeping", "feeling", "loving", "liking", "trying","busy",
     "choosing", "deciding", "hoping", "waiting", "calling", "asking", "answering", "telling",
     "saying", "talking", "smiling", "laughing", "crying", "singing", "dancing", "drawing",
     "painting", "driving", "riding", "traveling", "arriving", "leaving", "growing", "changing",
@@ -146,15 +146,84 @@ def is_valid(username, name=""):
 
     return True
 
-    
+def score_username(u, name=""):
+    score = 0
+    L = len(u)
+    if 6 <= L <= 12:
+        score += 4
+    elif 4 <= L <= 15:
+        score += 2
+    else:
+        score -= 3
+
+    # ---------- readability ----------
+    if u.islower():
+        score += 1
+
+    if u.count("_") + u.count(".") <= 2:
+        score += 1
+    else:
+        score -= 1
+
+    # ---------- numbers (a little is good) ----------
+    digits = sum(c.isdigit() for c in u)
+    if digits == 1 or digits == 2:
+        score += 2
+    elif digits > 3:
+        score -= 2
+
+    # ---------- repetition (cute, but not spammy) ----------
+    if name:
+        if u.count(name) == 2:
+            score += 3
+        elif u.count(name) > 3:
+            score -= 3
+
+    # ---------- bonuses ----------
+    if any(food in u for food in foods):
+        score += 2
+
+    if any(sound in u for sound in cart):
+        score += 1
+
+    score += random.uniform(-1.5, 1.5)
+    return score
+from collections import defaultdict
+
+def classify(u):
+    # numbers present
+    if any(c.isdigit() for c in u):
+        if "_" in u or "." in u:
+            return "mixed"
+        return "numeric"
+
+    # sentence-style names
+    if "_is" in u:
+        return "sentence"
+
+    # chaotic structure
+    if u.count("_") + u.count(".") >= 2:
+        return "chaos"
+
+    # cartoon sound based
+    if any(sound in u for sound in cart):
+        return "sound"
+
+    # clean / cute
+    return "simple"
+
 def named():
-    un=set()
+    attempts = 0
+    candidates=[]
     name=na.get().strip().lower()
     if not name:
         return
+    recent_patterns.clear()
     lb.delete(0,tk.END)
-    while len(un)<20:
+    while len(candidates)<80 and attempts <500:
+        attempts+=1
         ch=(1,2,3,4,5,6)
+        st=""
         o=random.choice(ch)
         if o==1:
              if len(name) > 2 and name[2] not in "aeiou":
@@ -170,10 +239,10 @@ def named():
              
             else:
                 if len(name)>3 and name[2] not in "jh" and name[3]  in "aeiounp":
-                    st=f"{name[:4]}{random.choice(po)}{random.choice(comm)}"
+                    st=f"{o}{name[:4]}{random.choice(po)}{random.choice(comm)}"
                  
                 else:
-                    st=name[::-1]+random.choice(com)+random.choice(cart)
+                    st=name[::-1]+random.choice(com)+random.choice(cart)+str(random.randint(10,99))
                     
             
         elif o==4:
@@ -182,14 +251,60 @@ def named():
             if len(name) > 3:
                 if name[2] in "eilmnopr" and name[3]  in "jhgr":
                     st=f"{name[0:3]}{random.choice(cart)}{random.choice(com)}{random.randint(10,99)}"
+                else:
+                    st=f"{name}{random.choice(com)}{random.randint(10,99)}{random.choice(cart)}"
             else:
                 st=f"{name[0:3]}{random.choice(cart)}{random.choice(com)}{random.randint(10,99)}"
-        #if is_valid(st,name):
         elif o==6:
             st=name[::-1]+name+random.choice(com)+random.choice(cart)+random.choice(com)+str(random.randint(10,99))
-        un.add(st)
-    for u in sorted(un):
-        lb.insert(tk.END,u)
+
+        if is_valid(st,name):
+            candidates.append(st)
+            buckets = defaultdict(list)
+    if not any(any(c.isdigit() for c in u) for u in candidates):
+        candidates.append(f"{name}{random.randint(10,99)}")
+
+
+    # group candidates by style
+    for u in set(candidates):
+        buckets[classify(u)].append(u)
+    best = []
+
+# flatten all candidates, scored
+    scored = sorted(
+    set(candidates),
+    key=lambda u: score_username(u, name),
+    reverse=True)
+    
+# first pass: try diversity
+    for bucket in buckets.values():
+        if not bucket:
+            continue
+
+        bucket_sorted = sorted(
+            bucket,
+            key=lambda u: score_username(u, name),
+            reverse=True
+        )
+
+        take = min(3, len(bucket_sorted))
+        best.extend(bucket_sorted[:take])
+
+# second pass: fill remaining slots with top scored
+    for u in scored:
+        if len(best) >= 20:
+            break
+        if u not in best:
+            best.append(u)
+    
+    lb.delete(0, tk.END)
+    for u in best:
+        lb.insert(tk.END, u)
+
+
+  
+
+
 def arca(parent, text, command):
     return tk.Button(
         parent, text=text, command=command, bg="yellowgreen",fg=BG, font=("Courier New", 11, "bold"),
